@@ -1,11 +1,10 @@
 import random
-from typing import Any
+import sys
 
 from env import RunbookEnv
 from tasks import Task, list_tasks
 from grader import grade
 
-# Global per-task action memory to avoid repeats
 USED_ACTIONS: dict[str, list[str]] = {}
 
 
@@ -25,7 +24,9 @@ def get_action(observation: dict, allowed_actions: list[str]) -> str:
 
 
 def run_inference(task: Task) -> float:
-    print(f"\n--- Starting Inference for Task: {task.id} ---")
+    # Required structured output: START block
+    print(f"[START] task={task.id}", flush=True)
+
     USED_ACTIONS[task.id] = []
 
     env = RunbookEnv(task)
@@ -35,6 +36,7 @@ def run_inference(task: Task) -> float:
     done = False
     max_iter = task.max_steps + 5
     iter_count = 0
+    step_num = 0
 
     while not done and iter_count < max_iter:
         iter_count += 1
@@ -43,16 +45,14 @@ def run_inference(task: Task) -> float:
         action = get_action(obs, allowed_actions)
 
         if action == "STOP_EXECUTION":
-            print("Stopping execution.")
             break
 
         obs, reward, done, info = env.step(action)
         obs["task_id"] = task.id
-
-        action_desc = action_map.get(action, "Unknown Action")
-        progress = obs["progress_ratio"]
         step_num = len(info["history"])
-        print(f"Step: {step_num} | Action: {action} ({action_desc}) | Reward: {reward:.2f} | Progress: {progress:.2f}")
+
+        # Required structured output: STEP block
+        print(f"[STEP] step={step_num} action={action} reward={reward:.4f}", flush=True)
 
     final_state = env.state()
     action_history = [
@@ -63,15 +63,14 @@ def run_inference(task: Task) -> float:
     grading_result = grade(actions=action_history, correct_steps=task.steps)
     final_score = grading_result["score"]
 
-    print(f"\n--- Final Score for Task '{task.id}' ---")
-    print(f"Score: {final_score:.2f} ({grading_result['accuracy_percentage']:.1f}%)")
-    print(f"Correct Matches: {grading_result['correct_matches']} / {grading_result['total_steps']}")
+    # Required structured output: END block
+    print(f"[END] task={task.id} score={final_score:.4f} steps={step_num}", flush=True)
 
     return final_score
 
 
 def main():
-    print("🚀 Starting Autonomous Incident Response Environment (Offline Mode)...")
+    print("🚀 Starting Autonomous Incident Response Environment (Offline Mode)...", flush=True)
 
     tasks = list_tasks()
     total_score = 0.0
@@ -82,9 +81,7 @@ def main():
 
     avg_score = total_score / len(tasks) if tasks else 0.0
 
-    print("\n" + "=" * 50)
-    print(f"=== OVERALL AVERAGE SCORE: {avg_score:.2f} ===")
-    print("=" * 50)
+    print(f"\n=== OVERALL AVERAGE SCORE: {avg_score:.2f} ===", flush=True)
 
 
 if __name__ == "__main__":
