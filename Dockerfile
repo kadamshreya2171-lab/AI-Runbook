@@ -1,11 +1,11 @@
 FROM python:3.11-slim
- 
+
 WORKDIR /app
- 
+
 COPY . .
- 
-RUN pip install --no-cache-dir fastapi uvicorn pydantic
- 
+
+RUN pip install --no-cache-dir fastapi uvicorn pydantic openai
+
 EXPOSE 7860
- 
-CMD ["python", "app.py"]
+
+CMD ["python", "server/app.py"]
