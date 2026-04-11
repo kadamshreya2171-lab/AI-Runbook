@@ -7,7 +7,7 @@ from env import RunbookEnv
 from tasks import Task, list_tasks
 from grader import grade
 
-# ── LiteLLM proxy client (injected by hackathon checker) ─────────────────────
+# ── LiteLLM proxy client ──────────────────────────────────────────────────────
 API_BASE_URL = os.environ.get("API_BASE_URL", "")
 API_KEY = os.environ.get("API_KEY", "")
 
@@ -16,6 +16,14 @@ if API_BASE_URL and API_KEY:
     client = OpenAI(base_url=API_BASE_URL, api_key=API_KEY)
 
 USED_ACTIONS: dict[str, list[str]] = {}
+
+SCORE_MIN = 0.01
+SCORE_MAX = 0.99
+
+
+def clamp_score(score: float) -> float:
+    """Ensure score is strictly between 0 and 1 as required by the checker."""
+    return max(SCORE_MIN, min(SCORE_MAX, score))
 
 
 def smart_fallback(task_id: str, allowed_actions: list[str]) -> str:
@@ -29,7 +37,6 @@ def smart_fallback(task_id: str, allowed_actions: list[str]) -> str:
 
 
 def get_action_from_llm(observation: dict, allowed_actions: list[str]) -> str:
-    """Call the hackathon LiteLLM proxy to select an action."""
     try:
         response = client.chat.completions.create(
             model="gpt-4o-mini",
@@ -103,7 +110,10 @@ def run_inference(task: Task) -> float:
     ]
 
     grading_result = grade(actions=action_history, correct_steps=task.steps)
-    final_score = grading_result["score"]
+    raw_score = grading_result["score"]
+
+    # Clamp to strictly (0, 1) as required by the checker
+    final_score = clamp_score(raw_score)
 
     print(f"[END] task={task.id} score={final_score:.4f} steps={step_num}", flush=True)
 
@@ -125,7 +135,7 @@ def main():
         total_score += score
 
     avg_score = total_score / len(tasks) if tasks else 0.0
-    print(f"\n=== OVERALL AVERAGE SCORE: {avg_score:.2f} ===", flush=True)
+    print(f"\n=== OVERALL AVERAGE SCORE: {avg_score:.4f} ===", flush=True)
 
 
 if __name__ == "__main__":
