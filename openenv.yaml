@@ -5,9 +5,12 @@ description: Autonomous Incident Response Benchmark Environment for evaluating A
 env: env.RunbookEnv
 
 tasks:
-  - easy
-  - medium
-  - hard
+  - cpu_spike_easy
+  - db_connection_pool_medium
+  - k8s_region_outage_hard
+
+tags:
+  - openenv
 
 metadata:
   version: "1.0.0"
