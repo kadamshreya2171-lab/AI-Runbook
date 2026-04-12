@@ -8,4 +8,5 @@ RUN pip install --no-cache-dir fastapi uvicorn pydantic openai
 
 EXPOSE 7860
 
-CMD ["python", "server/app.py"]
+ENV PYTHONPATH=/app
+CMD ["uvicorn", "server.app:app", "--host", "0.0.0.0", "--port", "7860"]
