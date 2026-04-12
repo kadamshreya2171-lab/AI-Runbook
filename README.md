@@ -1,85 +1,131 @@
-# 🚀 Autonomous Incident Response Benchmark Environment
-*The ultimate proving ground for AI SRE agents.*
+---
+title: AI Runbook - Autonomous Incident Response Environment
+emoji: 🚨
+colorFrom: red
+colorTo: red
+sdk: docker
+pinned: false
+---
+# 🚨 AI Runbook — Autonomous Incident Response Environment
+
+An **OpenEnv-compatible reinforcement learning environment** for training and evaluating AI agents on real-world DevOps incident response tasks.
+
+Agents must follow structured runbooks — diagnosing incidents, mitigating failures, and restoring system health — step by step, in the correct order.
 
 ---
 
-## 🧠 The Problem
-Production incidents are stressful, expensive, and rely heavily on manual human intervention. Site Reliability Engineers (SREs) follow strict runbooks to stabilize systems, but executing these steps takes time—minutes that cost companies thousands of dollars. We need autonomous agents that can seamlessly execute runbooks when alerts fire, but how do we know we can trust them?
+## 🎯 What This Environment Models
 
-## 💡 Our Solution
-Built by team **ByteBrains**, this OpenEnv-powered benchmark is a deterministic sandbox specifically designed to test, train, and evaluate AI agents on executing DevOps incident runbooks. By feeding the agent realistic system alerts and a strict set of allowed actions, we create an environment that mathematically grades an AI's ability to logically resolve outages without hallucination.
+Modern SRE and DevOps teams rely on runbooks: ordered sequences of diagnostic and mitigation actions for known failure patterns. This environment simulates that workflow, requiring an agent to:
 
-## ⚙️ How It Works 
-The environment loops exactly like a real incident console:
-1. `reset()` → Incident fires off (e.g., CPU spiked to 99%).
-2. `observation` → The AI receives context, incident state, and allowed action tokens.
-3. `AI action` → The model strictly selects a specialized action token.
-4. `step()` → The environment processes the action.
-5. `reward` → The agent is rewarded for correct execution or heavily penalized for straying off the runbook.
-6. **Repeat** until the system stabilizes or the agent fails.
+1. Observe an incident description and available actions
+2. Select the correct next step from the runbook
+3. Receive reward proportional to progress through the correct sequence
+4. Complete all steps to resolve the incident
 
-## 🧩 Key Features
-- **Action Token System**: Instead of bloated descriptive strings, agents choose from concise action tokens (e.g., `check_cpu`). This dramatically drops AI hallucination rates and forces structural reliability.
-- **Deterministic Grading (0.0 to 1.0)**: Zero randomness. An agent's final score is a hard mathematical reflection of its adherence to the exact sequence.
-- **Context-Aware Observations**: The `incident_state` dynamically updates based on mitigation progress, giving the AI realistic, contextual feedback as it works.
-- **Real-World Failure Consequences**: Tripping over wrong steps increments an internal failure counter. Hit the threshold, and the episode terminates early with a massive penalty—mimicking real production catastrophes.
-- **Action Reasoning Tracking**: Every step taken natively supports reasoning memory, providing full explainability into *why* the AI chose its action.
+This is a **genuine training signal** — agents that score well here have learned real incident response reasoning, not just pattern matching.
 
-## 📊 Tasks Overview
-The benchmark comes pre-loaded with escalating incident complexities:
-- 🟢 **Easy (CPU Spike)**: 3 steps. An API node is burning CPU. Diagnose, check logs, scale out.
-- 🟡 **Medium (DB Connection Exhaustion)**: 5 steps. The database pool is maxed out. Inspect metrics, identify queries, throttle endpoints, open optimization tickets.
-- 🔴 **Hard (K8s Regional Outage)**: 7+ steps. Total control plane failure in the primary region. Declare severity, verify secondary clusters, route global traffic, run synthetics.
+---
 
-## 🤖 AI Agent Integration
-We built a robust, production-ready inference execution loop (`inference.py`) interacting with the OpenAI API. 
-- **Strict Parsing**: The agent is forced by aggressive prompting and temperature 0.0 to return strictly formatted action tokens. 
-- **Resilience**: It dynamically validates outputs against allowed actions, utilizing auto-retry mechanisms for parsing failures.
-- **Safe Fallbacks**: If the AI critically hallucinates past retries, the loop executes a safe fallback default action, ensuring the engine never crashes.
+## 📋 Tasks
 
-## 📦 Project Structure
-```text
-ai-runbook-env/
-├── env.py              # Core RunbookEnv logic & contextual state
-├── tasks.py            # Task definitions & Action Token mapping
-├── models.py           # Pydantic validation schemas
-├── grader.py           # Mathematical correctness evaluation
-├── inference.py        # OpenAI Agent execution loop
-├── test_env.py         # Deterministic offline suite
-├── Dockerfile          # HF Spaces deployment blueprint
-├── openenv.yaml        # OpenEnv core registration
-└── README.md
+| Task ID | Name | Difficulty | Steps |
+|---|---|---|---|
+| `cpu_spike_easy` | Investigate CPU Spike on API Node | Easy | 3 |
+| `db_connection_pool_medium` | Stabilize DB Connection Pool Exhaustion | Medium | 5 |
+| `k8s_region_outage_hard` | Handle Regional K8s Control Plane Outage | Hard | 7 |
+
+### Difficulty Progression
+- **Easy**: Single-node CPU spike — diagnose and scale
+- **Medium**: Multi-step DB triage — inspect, identify, mitigate, throttle, track
+- **Hard**: Full regional failover — declare, verify, promote, reroute, validate, communicate, plan recovery
+
+---
+
+## 🏗️ Environment Design
+
+### Observation Space
+Each step, the agent receives:
+```json
+{
+  "description": "Incident description text",
+  "current_step": 2,
+  "remaining_steps": 3,
+  "allowed_actions": ["action_a", "action_b", ...],
+  "action_map": {"action_a": "Human-readable description"},
+  "progress_ratio": 0.4,
+  "incident_state": "Mitigation in progress. Step 2 completed."
+}
 ```
 
-## ▶️ How to Run
-It's incredibly simple to start testing locally:
-```bash
-# 1. Install dependencies
-pip install openenv-core openai pydantic python-dotenv
+### Action Space
+Discrete set of named action tokens per task (e.g. `check_cpu`, `declare_incident`). Actions outside the allowed set are penalized.
 
-# 2. Add your API key
-echo "OPENAI_API_KEY=your_key_here" > .env
+### Reward Shaping
+| Outcome | Reward |
+|---|---|
+| Correct action | `0.2 + 0.6 × progress_ratio` (grows as episode progresses) |
+| Wrong action | `-0.4` |
+| Invalid action | `-1.0` |
+| Episode completion bonus | `+0.5` |
+| Too many wrong steps (≥3) | `-0.5` penalty + episode ends |
 
-# 3. Run the complete AI benchmark loop
-python inference.py
+This reward structure encourages agents to act correctly early and maintain accuracy throughout.
+
+### Episode Boundaries
+- Episode ends when: all steps completed ✅, max wrong steps reached ❌, or max_steps exceeded ⏱️
+---
+## 🔌 API Endpoints
+| Method | Endpoint | Description |
+|---|---|---|
+| `POST` | `/reset` | Start new episode. Body: `{"task": "easy\|medium\|hard"}` |
+| `POST` | `/step` | Take action. Body: `{"action": "action_token"}` |
+| `GET` | `/validate` | Grade current episode |
+| `GET` | `/state` | Get current episode state |
+| `GET` | `/health` | Health check |
+
+---
+
+## 📁 Project Structure
+
+```
+AI_Runbook/
+├── env.py          # RunbookEnv — core RL environment
+├── tasks.py        # Task definitions, ACTION_MAP, Pydantic models
+├── grader.py       # Scoring logic with partial credit
+├── inference.py    # Agent runner with LiteLLM proxy support
+├── server/
+│   └── app.py      # FastAPI server (OpenEnv HTTP spec)
+├── Dockerfile      # Container definition
+└── openenv.yaml    # OpenEnv specification
 ```
 
-## 🐳 Docker Usage
-Ready for production evaluation or Hugging Face Spaces. It uses a hyper-optimized `python:3.12-slim` image:
-```bash
-# Build the clean image
-docker build -t ai-runbook-env .
+---
 
-# Run the containerized benchmark
-docker run --env-file .env ai-runbook-env
+## 🤖 Agent Integration
+
+```python
+from openai import OpenAI
+client = OpenAI(
+    base_url=os.environ["API_BASE_URL"],
+    api_key=os.environ["API_KEY"]
+)
+# POST /reset → get observation
+# Feed observation to LLM → get action token
+# POST /step with action → get next observation + reward
+# Repeat until done=True
+# GET /validate → get final score
 ```
 
-## ✅ Testing
-We believe in unbreakable foundations. Run `python test_env.py` to fire our robust manual test suite—validating everything from happy paths to edge-case boundary faults and invalid-action penalties. *(All tests currently pass with 100% success).*
+---
 
-## 🎯 Why This Project Stands Out
-This isn't a toy project or a generic chatbot wrapper. It is a highly opinionated, cleanly modular, strictly evaluated reinforcement-learning environment modeled after real SRE on-call trauma. It evaluates the most crucial skill an AI agent must master before touching production: following the rules accurately and deterministically.
+## 🧪 Grading
 
-## 📌 Final Note
-We built this because AI DevOps agents are the future, and the future needs a rigorous testing ground. We hope you enjoy breaking—and saving—it.  
-Built with ❤️ by **ByteBrains**.
+Scores are computed as `correct_steps / total_steps`, clamped to `(0.01, 0.99)`.
+Partial credit is awarded — an agent completing 4/5 steps correctly scores ~0.80.
+
+---
+
+## 👥 Authors
+
+Built for the **OpenEnv Hackathon** by Scaler × Meta.
