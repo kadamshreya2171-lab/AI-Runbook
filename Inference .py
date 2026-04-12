@@ -7,23 +7,15 @@ from env import RunbookEnv
 from tasks import Task, list_tasks
 from grader import grade
 
-# ── LiteLLM proxy client ──────────────────────────────────────────────────────
+# LiteLLM proxy client injected by hackathon checker
 API_BASE_URL = os.environ.get("API_BASE_URL", "")
-API_KEY = os.environ.get("API_KEY", "")
+API_KEY = os.environ.get("OPENAI_API_KEY", "")
 
 client = None
 if API_BASE_URL and API_KEY:
     client = OpenAI(base_url=API_BASE_URL, api_key=API_KEY)
 
 USED_ACTIONS: dict[str, list[str]] = {}
-
-SCORE_MIN = 0.01
-SCORE_MAX = 0.99
-
-
-def clamp_score(score: float) -> float:
-    """Ensure score is strictly between 0 and 1 as required by the checker."""
-    return max(SCORE_MIN, min(SCORE_MAX, score))
 
 
 def smart_fallback(task_id: str, allowed_actions: list[str]) -> str:
@@ -110,10 +102,7 @@ def run_inference(task: Task) -> float:
     ]
 
     grading_result = grade(actions=action_history, correct_steps=task.steps)
-    raw_score = grading_result["score"]
-
-    # Clamp to strictly (0, 1) as required by the checker
-    final_score = clamp_score(raw_score)
+    final_score = grading_result["score"]
 
     print(f"[END] task={task.id} score={final_score:.4f} steps={step_num}", flush=True)
 
