@@ -7,13 +7,26 @@ from env import RunbookEnv
 from tasks import Task, list_tasks
 from grader import grade
 
-# LiteLLM proxy client injected by hackathon checker
-API_BASE_URL = os.environ.get("API_BASE_URL", "")
-API_KEY = os.environ.get("OPENAI_API_KEY", "")
+# Try all possible env var names the checker might inject
+API_BASE_URL = (
+    os.environ.get("API_BASE_URL") or
+    os.environ.get("OPENAI_BASE_URL") or
+    ""
+)
+API_KEY = (
+    os.environ.get("OPENAI_API_KEY") or
+    os.environ.get("API_KEY") or
+    ""
+)
 
-client = None
-if API_BASE_URL and API_KEY:
-    client = OpenAI(base_url=API_BASE_URL, api_key=API_KEY)
+# Always initialize client - use dummy key if none provided
+# so the proxy call is always attempted
+if API_BASE_URL:
+    client = OpenAI(base_url=API_BASE_URL, api_key=API_KEY or "dummy")
+elif API_KEY:
+    client = OpenAI(api_key=API_KEY)
+else:
+    client = None
 
 USED_ACTIONS: dict[str, list[str]] = {}
 
@@ -111,10 +124,9 @@ def run_inference(task: Task) -> float:
 
 def main():
     print("🚀 Starting Autonomous Incident Response Environment...", flush=True)
-    if client:
-        print("✅ LLM proxy connected", flush=True)
-    else:
-        print("⚠️ No LLM proxy — using smart fallback", flush=True)
+    print(f"API_BASE_URL: {'set' if API_BASE_URL else 'not set'}", flush=True)
+    print(f"API_KEY: {'set' if API_KEY else 'not set'}", flush=True)
+    print(f"LLM client: {'connected' if client else 'not connected'}", flush=True)
 
     tasks = list_tasks()
     total_score = 0.0
